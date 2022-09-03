@@ -28,7 +28,7 @@ grid_size = 5
 # training parameters
 eps = 0.1       # exploration likelihood
 gamma = 0.99    # discount factor
-alpha = 0.1     # learning rate
+alpha = 0.099     # learning rate
 
 
 # Set up Q(s, a)
