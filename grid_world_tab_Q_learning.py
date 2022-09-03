@@ -11,9 +11,9 @@ https://www.youtube.com/watch?v=Psrhxy88zww
 2. sample initial state s
 3. Sample action a (epsilon-greedy)
 4. Take a step through the environment, and get next state s', reward, done signal
-5a. If done: estimate of Q*(s, a) = reward, reset initial state s
-5b. Else: estimate of Q*(s, a) = reward + discounted max(Q(s', ))
-6. Update Q(s, a) with estimate of Q*(s, a) scaled by a learning rate
+5a. If done: estimate of Q*(s', a) = reward, reset initial state s
+5b. Else: estimate of Q*(s', a) = reward + discounted max(Q(s', ))
+6. Update Q(s, a) with estimate of Q*(s', a) scaled by a learning rate
 8. Repeat 3 - 7 for # of training steps
 '''
 
@@ -77,17 +77,17 @@ def simulate(steps=1000,train=False):
         observation, reward, done, info = env.step(action)
         
         estimate = 0
-        if done: # 5a. If done: estimate of Q*(s, a) = reward, reset initial state s
+        if done: # 5a. If done: estimate of Q*(s', a) = reward, reset initial state s
             estimate = reward
             observation, info = env.reset()
-        else: # 5b. Else: estimate of Q*(s, a) = reward + discounted max(Q(s', ))
+        else: # 5b. Else: estimate of Q*(s', a) = reward + discounted max(Q(s', ))
             new_agent_pos = observation["agent"]
             new_target_pos = observation["target"]
             possible_returns = np.array(Q[tuple(np.concatenate((new_agent_pos, new_target_pos), axis = None))])
 
             estimate = reward + gamma * possible_returns.max()
 
-        # 6. Update Q(s, a) with estimate of Q*(s, a) scaled by a learning rate
+        # 6. Update Q(s, a) with estimate of Q*(s', a) scaled by a learning rate
         if train:
             Q[index] = (1.0 - alpha) * Q[index] + alpha * gamma * estimate
 
