@@ -1,6 +1,10 @@
 # rl_toys
 A collection of toy environments and algorithm implementations.
 
+```
+pip install gym
+```
+
 # Algorithm implementations
 
 ## Tabular Q learning on Grid World
