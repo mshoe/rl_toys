@@ -13,14 +13,9 @@ class GridWorldEnv(gym.Env):
         self.size = size  # The size of the square grid
         self.window_size = 512  # The size of the PyGame window
 
-        # Observations are dictionaries with the agent's and the target's location.
-        # Each location is encoded as an element of {0, ..., `size`}^2, i.e. MultiDiscrete([size, size]).
-        self.observation_space = spaces.Dict(
-            {
-                "agent": spaces.Box(0, size - 1, shape=(2,), dtype=int),
-                "target": spaces.Box(0, size - 1, shape=(2,), dtype=int),
-            }
-        )
+        # obs is sizexsize grid, where each cell contains 0 = empty, 1 = agent, 2 = target
+        # todo
+        self.observation_space = spaces.Tuple(spaces.Discrete(size), spaces.Discrete(size), spaces.Discrete(3))
 
         # We have 4 actions, corresponding to "right", "up", "left", "down"
         self.action_space = spaces.Discrete(4)
@@ -69,11 +64,10 @@ class GridWorldEnv(gym.Env):
         while np.array_equal(self._target_location, self._agent_location):
             self._target_location = self.np_random.integers(0, self.size, size=2)
 
-        # return initial observation
+        # return initial observation and info
         observation = self._get_obs()
-        # info = self._get_info()
-        # stable-baselines3 expects this to be a Dict, not a tuple, so not including info here
-        return observation
+        info = self._get_info()
+        return (observation, info)
 
     def step(self, action):
         # Map the action (element of {0,1,2,3}) to the direction we walk in

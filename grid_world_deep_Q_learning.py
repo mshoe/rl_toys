@@ -1,26 +1,20 @@
 '''
-Author: Michael Xu, 9/3/2022
+Author: Michael Xu
 
-Tabular Q-Learning Algorithm:
-We want to learn the optimal Q function Q*(s, a)
-Reference: L2 Deep Q-Learning (Foundations of Deep RL Series)
-https://www.youtube.com/watch?v=Psrhxy88zww
+Deep Q-learning (without experience replay)
 
-0. Initialize environment
-1. Initialize Q(s, a) for all states and actions
-2. sample initial state s
-3. Sample action a (epsilon-greedy)
-4. Take a step through the environment, and get next state s', reward, done signal
-5a. If done: estimate of Q*(s, a) = reward, reset initial state s
-5b. Else: estimate of Q*(s, a) = reward + discounted max(Q(s', ))
-6. Update Q(s, a) with estimate of Q*(s, a) scaled by a learning rate
-8. Repeat 3 - 7 for # of training steps
+In Deep Q-Learning, it is assumed that our state x action space is too large,
+so we need to find a function approximator for Q(s, a), which is usually 
+a neural network.
+
+
 '''
-
 import gym
 from envs.grid_world import GridWorldEnv
 import numpy as np
 import random
+import torch
+from torch import nn
 
 # environment parameters
 grid_size = 5
@@ -34,7 +28,11 @@ alpha = 0.099     # learning rate
 # Set up Q(s, a)
 # state space S size is (n,n,n,n), which is (n,n) for agent position and (n,n) for target position
 # action space A size 4, so the Q space is (n,n,n,n,4)
-Q = np.zeros(shape=(grid_size, grid_size, grid_size, grid_size, 4))
+#Q = np.zeros(shape=(grid_size, grid_size, grid_size, grid_size, 4))
+
+# (x,y) for agent, (x,y) for target, and a for action
+Q = nn.Sequential(nn.Linear(5, 16), nn.ReLU(), nn.Linear(16, 8), nn.ReLU(), nn.Linear(8, 1))
+
 
 def simulate(steps=1000,train=False):
     global Q
@@ -46,8 +44,7 @@ def simulate(steps=1000,train=False):
     
 
     # 1. Initialize Q(s, a) for all states and actions
-    if train:
-        Q = np.zeros(shape=(grid_size, grid_size, grid_size, grid_size, 4))
+    # initialized theta = 0
     
     # 2. sample initial state s
     observation = env.reset(seed=42)
@@ -62,7 +59,11 @@ def simulate(steps=1000,train=False):
         greedy = random.random() > eps
         if greedy:
             # argmax for best action used in greedy update
-            possible_returns = np.array(Q[tuple(np.concatenate((agent_pos, target_pos), axis = None))])
+            possible_returns = []
+            for action in range(env.action_space.n):
+                Q_val = Q.forward(np.concatenate((agent_pos, target_pos, action), axis=None))
+                possible_returns.append(Q_val)
+            possible_returns = np.array(possible_returns)
 
             # Get all the actions that return the best value, then randomly select one
             # If there is only one best value, then this is deterministic
@@ -83,11 +84,17 @@ def simulate(steps=1000,train=False):
         else: # 5b. Else: estimate of Q*(s, a) = reward + discounted max(Q(s', ))
             new_agent_pos = observation["agent"]
             new_target_pos = observation["target"]
-            possible_returns = np.array(Q[tuple(np.concatenate((new_agent_pos, new_target_pos), axis = None))])
+
+            # argmax for best action of next state
+            possible_returns = []
+            for action in range(env.action_space.n):
+                Q_val = Q.forward(np.concatenate((new_agent_pos, new_target_pos, action), axis=None))
+                possible_returns.append(Q_val)
+            possible_returns = np.array(possible_returns)
 
             estimate = reward + gamma * possible_returns.max()
 
-        # 6. Update Q(s, a) with estimate of Q*(s, a) scaled by a learning rate
+        # 6. Update Q-network
         if train:
             Q[index] = (1.0 - alpha) * Q[index] + alpha * estimate
 
