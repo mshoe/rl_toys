@@ -1,3 +1,4 @@
+from turtle import distance
 import gym
 from gym import spaces
 import numpy as np
@@ -18,9 +19,11 @@ import math
 
 res = 512
 space_normalizer = np.array([res, res], dtype=float)
-max_gravity_magnitude = 900.0
+max_magnet_magnitude = 9000.0
+magnet_force_constant = 200.0
+max_magnet_speed = 1000.0
 
-class PuckWorldEnv(gym.Env):
+class PuckWorldMagnetEnv(gym.Env):
     metadata = {"render_modes": ["human"], "render_fps": 30}
 
     def __init__(self, render_mode: Optional[str] = None, human_player = False):
@@ -32,6 +35,7 @@ class PuckWorldEnv(gym.Env):
             {
                 "com": spaces.Box(0.0, 1.0, shape=(2,), dtype=float),
                 "vel": spaces.Box(float("-inf"), float("inf"), shape=(2,), dtype=float),
+                "magnet_com": spaces.Box(0.0, 1.0, shape=(2,), dtype=float),
                 "target": spaces.Box(0.0, 1.0, shape=(2,), dtype=float)
             }
         )
@@ -58,8 +62,9 @@ class PuckWorldEnv(gym.Env):
     def _get_obs(self):
         com = np.array(self._ball.body.position) / space_normalizer
         vel = np.array(self._ball.body.velocity) / space_normalizer
+        magnet_com = self.magnet_com / space_normalizer
         target = self.target_com / space_normalizer
-        return {"com": com, "vel": vel, "target": target}
+        return {"com": com, "vel": vel, "magnet_com": magnet_com, "target": target}
 
     def _get_info(self, observation):
         displacement = np.array(observation["com"]) - np.array(observation["target"])
@@ -91,9 +96,14 @@ class PuckWorldEnv(gym.Env):
         self._space.add(body, shape)
         self._ball = shape
 
-    def create_target(self) -> None:
+    def _create_target(self) -> None:
         self.target_radius = 50
         self.target_com = np.array([128.0 + np.random.rand() * 256.0, 128.0 + np.random.rand() * 256.0])
+
+    def _create_magnet(self) -> None:
+        self.magnet_radius = 50
+        self.magnet_com = np.array([128.0 + np.random.rand() * 256.0, 128.0 + np.random.rand() * 256.0])
+        self.magnet_vel = np.array([0.0, 0.0])
 
     def reset(self, seed = None, options = None):
         """
@@ -117,7 +127,8 @@ class PuckWorldEnv(gym.Env):
         self._space.add(*static_lines)
 
         self._create_ball()
-        self.create_target()
+        self._create_target()
+        self._create_magnet()
 
         self._time = 0.0
 
@@ -125,11 +136,32 @@ class PuckWorldEnv(gym.Env):
 
     
     def step(self, action):
-        if not self.human_player:
-            self._space.gravity = tuple(action * max_gravity_magnitude)
+        
+        if self.human_player == False:
+            self.magnet_vel = action * max_magnet_speed
 
         # Progress time forward
         for x in range(self._physics_steps_per_frame):
+            
+            # timestep magnet
+            magnet_com = np.array(self.magnet_com)
+            magnet_com += self.magnet_vel * self._dt
+            magnet_com = np.clip(magnet_com, np.array([0.0, 0.0]), space_normalizer)
+            self.magnet_com = tuple(magnet_com)
+
+            # apply magnet force to puck
+            displacement = self.magnet_com - np.array(self._ball.body.position)
+            distanceSquared = np.dot(displacement, displacement)
+            distance = np.sqrt(distanceSquared)
+            magnet_dir = displacement / distance if distance != 0.0 else np.array([0.0, 0.0])
+            
+            # our magnet force will scale linearly off distance to make control easier
+            distanceNormed = distance / float(res)
+            magnet_force_mag = magnet_force_constant * self._ball.body.mass * np.max([1.0 - distanceNormed, 0.0])
+            magnet_force = tuple(magnet_dir * magnet_force_mag)
+            self._ball.body.apply_force_at_local_point(magnet_force, (0.0, 0.0))
+            
+
             self._space.step(self._dt)
             self._time += self._dt
 
@@ -148,6 +180,9 @@ class PuckWorldEnv(gym.Env):
 
             target_color = (0, 255, 0)
             pygame.draw.circle(self._screen, target_color, tuple(self.target_com), self.target_radius)
+
+            pygame.draw.circle(self._screen, (0, 0, 0), tuple(self.magnet_com), self.magnet_radius)
+
             pygame.display.flip()
             # Delay fixed time between frames
             self._clock.tick(50)
@@ -162,13 +197,13 @@ class PuckWorldEnv(gym.Env):
         if self.render_mode == "human":
             for event in pygame.event.get():
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_w:
-                    self._space.gravity = (0.0, -900.0)
+                    self.magnet_vel = np.array([0.0, -100.0])
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_s:
-                    self._space.gravity = (0.0, 900.0)
+                    self.magnet_vel = np.array([0.0, 100.0])
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_a:
-                    self._space.gravity = (-900.0, 0.0)
+                    self.magnet_vel = np.array([-100, 0.0])
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_d:
-                    self._space.gravity = (900.0, 0.0)
+                    self.magnet_vel = np.array([100.0, 0.0])
 
     def _clear_screen(self) -> None:
         """

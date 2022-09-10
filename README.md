@@ -3,6 +3,8 @@ A collection of toy environments and algorithm implementations.
 
 ```
 pip install gym
+pip install stable-baselines3
+pip install pymunk
 ```
 
 # Algorithm implementations
