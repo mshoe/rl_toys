@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+from functools import wraps
 
 # This exercise is way more complicated than it seems, mainly because of the dynamics function
 
@@ -17,21 +18,44 @@ EXPECTED_RETURNS_LOC_2 = 2
 
 DISCOUNT_FACTOR = 0.9
 
-# the action space is [-5, 5] which is the number of cars we can move between location 1 and 2,
-# positive means moving from 1 to 2, negative means moving from 2 to 1
-action_space = np.arange(start=-5, stop=6)
+def cache_on_instance(func):
+    """caching for single argument methods"""
+    @wraps(func)
+    def wrapper(instance, n):
+        cache = getattr(instance, "{}_cache".format(func.__name__))
+        if n not in cache:
+            output = func(instance, n)
+            cache[n] = output
+            return output
+        else:
+            return func(instance, n)
+    return wrapper
 
-# the state space is a 2D vector, where each element can range from [0, 20]
+
+class Poisson:
+    """Caching Poisson Distribution"""
+    def __init__(self, mean):
+        self.mean = mean
+
+        self.pmf_cache = dict()
+        self.cdf_cache = dict()
+
+    @cache_on_instance
+    def pmf(self, n):
+        return np.exp(- self.mean) * np.power(self.mean, n) / np.math.factorial(n)
+        # return _poisson.pmf(n, self.mean)
+
+    @cache_on_instance
+    def cdf(self, n):
+        return _poisson.cdf(n, self.mean)
 
 
-
-
-# the number of cars requested and returned at each location is a poisson random variable
-# where lambda is the expected number of cars requested/returned, and n is the number of cars
-# requested/returned. We will use the following function to compute the probability of n cars
-# requested/returned given lambda
-def poisson(lamda, n):
-    return (lamda ** n) * np.exp(-lamda) / np.math.factorial(n)
+class Distributions:
+    def __init__(self):
+        self.x_rental = Poisson(3)
+        self.x_return = Poisson(3)
+        self.y_rental = Poisson(4)
+        self.y_return = Poisson(2)
 
 
 # 4 argument dynamics function

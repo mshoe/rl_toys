@@ -56,17 +56,18 @@ big_course = ['WWWWWWWWWWWWWWWWWW',
               'WWWW------WWWWWWWW']
 
 class Racetrack(gym.Env):
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
+    metadata = {"render_modes": ["human", "rgb_array", "none"], "render_fps": 4}
 
     
-    def __init__(self, course):
+    def __init__(self, course=tiny_course, max_speed=5, render_mode="human"):
         
         self.load_course(course)
         
+        self.max_speed = max_speed
         self.cell_size = 16 # num pixels*pixels per cell
         self.window_width = self.cell_size * self.num_x
         self.window_height = self.cell_size * self.num_y
-        self.render_mode = "human"
+        self.render_mode = render_mode
 
 
         self.reset()
@@ -74,6 +75,13 @@ class Racetrack(gym.Env):
         # velocity may be changed by +1, -1, or 0 for both x and y components.
         # this leads to a total of 3x3 = 9 actions
         self.action_space = spaces.Discrete(9)
+
+        self.observation_space = spaces.Dict(
+            {
+                "position": spaces.Box(low=np.array([0, 0]), high=np.array([self.num_x, self.num_y]), dtype=np.int),
+                "velocity": spaces.Box(low=np.array([0, 0]), high=np.array([self.max_speed, self.max_speed]), dtype=np.int)
+            }
+        )
 
         self._action_to_acceleration = {
             0: np.array([-1, -1]),
@@ -139,8 +147,8 @@ class Racetrack(gym.Env):
         next_velocity[0] = max(0, next_velocity[0])
         next_velocity[1] = max(0, next_velocity[1])
 
-        next_velocity[0] = min(5, next_velocity[0])
-        next_velocity[1] = min(5, next_velocity[1])
+        next_velocity[0] = min(self.max_speed, next_velocity[0])
+        next_velocity[1] = min(self.max_speed, next_velocity[1])
 
         if not np.any(next_velocity): # if both components are zero
             if self.get_cell_type(self._position) == 2:
@@ -174,6 +182,10 @@ class Racetrack(gym.Env):
         # the observation is the position and velocity
         observation = self._get_obs()
         info = self._get_info()
+
+        if (self.render_mode == "human"):
+            #print("action: ", self._action_to_acceleration[action])
+            self.render()
 
 
         # return the 4-tuple (observation, reward, done, info)
@@ -293,20 +305,4 @@ class Racetrack(gym.Env):
             return 0
         return self.grid[xx, self.num_y-1 - yy]
 
-
-if __name__ == "__main__":
-    env = Racetrack(big_course)
-
-    print("start cells =", env.start_cells)
-
-    while True:
-        #action, _states = model.predict(obs)
-        action = env.action_space.sample()
-        obs, rewards, done, info = env.step(action)
-        print("action =",env._action_to_acceleration[action])
-        print("obs =",obs)
-        print("info =",info)
-
-        env.render()
-        if done:
-           obs, info = env.reset()
+    
